@@ -1,6 +1,6 @@
 # ✈️ N-DoS
 
-[![License: MIT](https://shields.io/github/license/anhnoine/nDoS)](LICENSE)
+[![License: MIT](https://shields.io/github/license/anhnoine/n-manios)](LICENSE)
 
 ## Github
 
