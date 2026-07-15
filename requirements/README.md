@@ -4,7 +4,8 @@
 
 ## Github
 
-[Github](https://github.com/anhnoine/n-manios/)
+[MANIOS](https://github.com/anhnoine/n-manios/)
+[nSocks](https://raw.githubusercontent.com/anhnoine/n-manios/refs/heads/main/nPlugins/plugins/nSocks.c)
 
 ## Contributors ✨
 
