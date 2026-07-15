@@ -224,7 +224,7 @@ end
 # ===== Logo =====
 craft logo
     yell ""
-    yell "  ▄▄▄▄▄▄      ▄▄                  ▄▄     ▄▄▄   ▄   ▄▄▄▄       ▄▄▄▄▄"
+    yell "          N-DoS"
     yell "  Tool attack server easy."
     yell "  Author: IdlerHa"
     yell ""
