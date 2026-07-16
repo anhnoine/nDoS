@@ -11,11 +11,14 @@ echo ""
 sleep 5
 bash <(curl -s https://raw.githubusercontent.com/anhnoine/n-manios/refs/heads/main/nPlugins/nplugin_install.sh)
 rm nSocks.c
+rm n-args.c
 clear
 wget https://raw.githubusercontent.com/anhnoine/n-manios/refs/heads/main/nPlugins/plugins/nSocks.c
+wget https://raw.githubusercontent.com/anhnoine/n-manios/refs/heads/main/nPlugins/plugins/n-args.c
 wget https://raw.githubusercontent.com/anhnoine/nDoS/refs/heads/main/tools/nDoS.mno
 nplugin install -f nSocks.c
 rm nSocks.c
+rm n-args.c
 clear
 echo ""
 echo "  ======================================="
