@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 clear
+apt update
 apt install git -y
 clear
 echo ""
